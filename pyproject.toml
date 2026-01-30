@@ -1,0 +1,97 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mx-exchange-dataclient"
+version = "0.1.0"
+description = "Python client for Mexican Stock Exchanges (BIVA & BMV) - fetches issuer data, documents, and filings"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "SURA Team" }
+]
+keywords = [
+    "biva",
+    "bmv",
+    "mexico",
+    "stock-exchange",
+    "ckd",
+    "fibra",
+    "cerpi",
+    "financial-data",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+    "requests>=2.28.0",
+    "pandas>=1.5.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+scraper = [
+    "playwright>=1.40.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "types-requests>=2.28.0",
+    "types-beautifulsoup4>=4.12.0",
+]
+all = [
+    "mx-exchange-dataclient[scraper,dev]",
+]
+
+[project.scripts]
+biva = "mx_exchange_dataclient.cli:main"
+bmv = "mx_exchange_dataclient.bmv_cli:main"
+
+[project.urls]
+Homepage = "https://github.com/your-org/mx-exchange-dataclient"
+Documentation = "https://github.com/your-org/mx-exchange-dataclient#readme"
+Repository = "https://github.com/your-org/mx-exchange-dataclient"
+Issues = "https://github.com/your-org/mx-exchange-dataclient/issues"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mx_exchange_dataclient"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
