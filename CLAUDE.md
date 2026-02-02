@@ -45,14 +45,33 @@ mypy src/
 ## Architecture
 
 ```
-src/biva_client/
-├── client.py      # BIVAClient - REST API client with rate limiting and pagination
-├── models.py      # Pydantic models for BIVA API responses + KNOWN_ISSUERS registry
-├── cli.py         # BIVA CLI with subcommands: issuer, documents, download, export
-├── bmv_client.py  # BMVClient - HTML scraping client for BMV
-├── bmv_models.py  # Pydantic models for BMV scraped data + KNOWN_BMV_ISSUERS registry
-├── bmv_cli.py     # BMV CLI with subcommands: issuer, documents, download, export
-└── __init__.py    # Public API exports (both BIVA and BMV)
+src/mx_exchange_dataclient/
+├── clients/
+│   ├── biva.py        # BIVAClient - REST API client with rate limiting and pagination
+│   ├── bmv.py         # BMVClient - HTML scraping client using Playwright/BeautifulSoup
+│   └── base.py        # Shared client utilities
+├── models/
+│   ├── biva.py        # Pydantic models for BIVA API + KNOWN_ISSUERS registry
+│   ├── bmv.py         # Pydantic models for BMV + KNOWN_BMV_ISSUERS registry
+│   └── xbrl.py        # Models for XBRL data and analytics
+├── cli/
+│   ├── main.py        # Unified CLI (mxdata command)
+│   ├── biva.py        # BIVA CLI subcommands
+│   └── bmv.py         # BMV CLI subcommands
+├── sync/
+│   ├── engine.py      # SyncEngine - bulk/incremental document sync
+│   ├── state.py       # SyncState - track sync progress
+│   ├── storage.py     # StorageLayout - organize downloaded files
+│   └── download.py    # DownloadManager - handle file downloads
+├── xbrl/
+│   ├── parser.py      # XBRLParser - parse XBRL financial statements
+│   ├── reconciliation.py  # NAV reconciliation across periods
+│   └── metrics.py     # Performance metrics (IRR, TVPI, DPI, RVPI)
+├── utils/
+│   ├── event_classifier.py  # Classify relevant events
+│   └── file_organizer.py    # Organize downloaded files by type
+├── data/              # Known issuers, XBRL concept mappings
+└── __init__.py        # Public API exports
 ```
 
 ### BIVA Client (REST API)
@@ -71,8 +90,8 @@ src/biva_client/
 ### BMV Client (HTML Scraping)
 
 **Key patterns:**
-- `BMVClient` scrapes HTML pages using BeautifulSoup + lxml
-- Requires `beautifulsoup4` and `lxml` (install with `pip install biva-client[scraper]`)
+- `BMVClient` scrapes HTML pages using Playwright + BeautifulSoup
+- Requires `playwright`, `beautifulsoup4`, and `lxml` (install with `pip install mx-exchange-dataclient[scraper]`)
 - Issuer identification uses ticker + ID format (e.g., "LOCKXPI-35563")
 - Document URLs extracted from anchor tags, converted from viewer URLs to direct downloads
 - Market types: CGEN_CAPIT (equities), CGEN_ELDEU (debt), CGEN_GLOB (global), CGEN_CANC (cancelled)
@@ -143,7 +162,7 @@ Run integration tests with `pytest --integration` (requires network access to bi
 ### BIVA
 | Ticker | ID | Description |
 |--------|-----|-------------|
-| CAPGLPI | 2215 | Banco Nacional de México |
+| CAPGLPI | 2215 | Capital Global Private Investment CERPI |
 
 ### BMV
 | Ticker | ID | Market | Description |

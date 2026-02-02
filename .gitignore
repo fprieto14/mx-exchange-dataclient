@@ -76,3 +76,4 @@ dmypy.json
 # Downloaded files (for testing)
 downloads/
 *.pdf
+output/
