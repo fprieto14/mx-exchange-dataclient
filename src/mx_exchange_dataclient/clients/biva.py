@@ -11,8 +11,10 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-from mx_exchange_dataclient.models import (
+from mx_exchange_dataclient.models.biva import (
     Document,
     DocumentType,
     Emission,
@@ -23,6 +25,10 @@ from mx_exchange_dataclient.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Constants for validation
+MAX_PAGE_SIZE = 100
+MIN_PAGE_SIZE = 1
 
 
 class BIVAClient:
@@ -37,6 +43,10 @@ class BIVAClient:
 
         >>> for doc in client.iter_documents(2215):
         ...     print(doc.tipo_documento, doc.download_url)
+
+        # Use as context manager for automatic cleanup
+        >>> with BIVAClient() as client:
+        ...     issuer = client.get_issuer(2215)
     """
 
     BASE_URL = "https://www.biva.mx/emisoras"
@@ -47,6 +57,9 @@ class BIVAClient:
         base_url: str | None = None,
         timeout: int = 30,
         rate_limit_delay: float = 0.5,
+        session: requests.Session | None = None,
+        pool_connections: int = 10,
+        pool_maxsize: int = 10,
     ):
         """
         Initialize BIVA client.
@@ -55,17 +68,44 @@ class BIVAClient:
             base_url: Override base API URL
             timeout: Request timeout in seconds
             rate_limit_delay: Delay between paginated requests (seconds)
+            session: Optional shared requests session
+            pool_connections: Number of connection pools (if creating new session)
+            pool_maxsize: Max connections per pool (if creating new session)
         """
         self.base_url = base_url or self.BASE_URL
         self.timeout = timeout
         self.rate_limit_delay = rate_limit_delay
+        self._owns_session = session is None
 
-        self.session = requests.Session()
+        if session is not None:
+            self.session = session
+        else:
+            self.session = requests.Session()
+            # Configure connection pooling
+            adapter = HTTPAdapter(
+                pool_connections=pool_connections,
+                pool_maxsize=pool_maxsize,
+                max_retries=Retry(total=0),  # Don't retry at adapter level
+            )
+            self.session.mount("https://", adapter)
+            self.session.mount("http://", adapter)
+
         self.session.headers.update({
-            "User-Agent": "biva-client/0.1.0",
+            "User-Agent": "mx-exchange-dataclient/0.1.0",
             "Accept": "application/json",
             "Referer": "https://www.biva.mx/empresas/emisoras_inscritas",
         })
+
+    def close(self):
+        """Close the session if we own it."""
+        if self._owns_session and self.session:
+            self.session.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
     def _get(self, endpoint: str, params: dict | None = None) -> dict:
         """Make GET request to API endpoint."""
@@ -188,7 +228,15 @@ class BIVAClient:
 
         Returns:
             Paginated response with Document objects
+
+        Raises:
+            ValueError: If page or size is invalid
         """
+        if page < 0:
+            raise ValueError(f"Page must be non-negative, got {page}")
+        if not MIN_PAGE_SIZE <= size <= MAX_PAGE_SIZE:
+            raise ValueError(f"Size must be between {MIN_PAGE_SIZE} and {MAX_PAGE_SIZE}, got {size}")
+
         issuer_id = resolve_issuer_id(issuer_id)
         params = {"page": page, "size": size}
 
@@ -279,9 +327,9 @@ class BIVAClient:
         Download a document file.
 
         Args:
-            document: Document object to output
+            document: Document object to download
             output_dir: Directory to save file
-            delay: Delay before output (rate limiting)
+            delay: Delay before download (rate limiting)
 
         Returns:
             Path to downloaded file, or None if failed
@@ -320,7 +368,7 @@ class BIVAClient:
             return filepath
 
         except Exception as e:
-            logger.error(f"Failed to output {url}: {e}")
+            logger.error(f"Failed to download {url}: {e}")
             return None
 
     def download_all_documents(

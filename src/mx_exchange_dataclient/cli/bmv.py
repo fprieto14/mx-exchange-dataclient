@@ -6,7 +6,7 @@ Command-line interface for fetching BMV (Bolsa Mexicana de Valores) data.
 Usage:
     bmv issuer LOCKXPI 35563
     bmv documents LOCKXPI 35563 CGEN_CAPIT
-    bmv output LOCKXPI 35563 CGEN_CAPIT --output ./downloads
+    bmv download LOCKXPI 35563 CGEN_CAPIT --output ./downloads
 """
 
 import argparse
@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from biva_client.bmv_client import BMVClient
-from biva_client.bmv_models import MARKET_TYPES, resolve_bmv_issuer
+from mx_exchange_dataclient.clients.bmv import BMVClient
+from mx_exchange_dataclient.models.bmv import MARKET_TYPES, resolve_bmv_issuer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -200,9 +200,7 @@ def cmd_export(args):
         pdfs_dir = output_dir / "files"
         print(f"\nDownloading {len(documents)} documents...")
 
-        downloaded = client.download_all_documents(
-            ticker, issuer_id, market, pdfs_dir
-        )
+        downloaded = client.download_all_documents(ticker, issuer_id, market, pdfs_dir)
         print(f"Downloaded {len(downloaded)} files")
 
 
@@ -224,10 +222,10 @@ Examples:
   bmv documents LOCKXPI 35563 CGEN_CAPIT --category events --output docs.csv
 
   # Download all documents
-  bmv output LOCKXPI 35563 CGEN_CAPIT --output ./downloads
+  bmv download LOCKXPI 35563 CGEN_CAPIT --output ./downloads
 
   # Full export (info + documents + files)
-  bmv export LOCKXPI 35563 CGEN_CAPIT --output ./lockxpi --output
+  bmv export LOCKXPI 35563 CGEN_CAPIT --output ./lockxpi --download
 
 Market types:
   CGEN_CAPIT - Capitales (Equities, CKDs)
@@ -237,7 +235,8 @@ Market types:
         """,
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose logging",
     )
@@ -247,8 +246,12 @@ Market types:
     # issuer command
     issuer_parser = subparsers.add_parser("issuer", help="Get issuer information")
     issuer_parser.add_argument("ticker", help="Ticker symbol (e.g., LOCKXPI)")
-    issuer_parser.add_argument("issuer_id", nargs="?", type=int, help="Issuer ID (optional if known)")
-    issuer_parser.add_argument("--securities", action="store_true", help="Include securities")
+    issuer_parser.add_argument(
+        "issuer_id", nargs="?", type=int, help="Issuer ID (optional if known)"
+    )
+    issuer_parser.add_argument(
+        "--securities", action="store_true", help="Include securities"
+    )
     issuer_parser.add_argument("--json", action="store_true", help="Output as JSON")
     issuer_parser.set_defaults(func=cmd_issuer)
 
@@ -267,8 +270,8 @@ Market types:
     docs_parser.add_argument("--json", action="store_true", help="Output as JSON")
     docs_parser.set_defaults(func=cmd_documents)
 
-    # output command
-    dl_parser = subparsers.add_parser("output", help="Download documents")
+    # download command
+    dl_parser = subparsers.add_parser("download", help="Download documents")
     dl_parser.add_argument("ticker", help="Ticker symbol")
     dl_parser.add_argument("issuer_id", nargs="?", type=int, help="Issuer ID")
     dl_parser.add_argument("market", help="Market type")
@@ -281,7 +284,9 @@ Market types:
     export_parser.add_argument("issuer_id", nargs="?", type=int, help="Issuer ID")
     export_parser.add_argument("market", help="Market type")
     export_parser.add_argument("--output", "-o", required=True, help="Output directory")
-    export_parser.add_argument("--output", "-d", action="store_true", help="Also output files")
+    export_parser.add_argument(
+        "--download", "-d", action="store_true", help="Also download files"
+    )
     export_parser.set_defaults(func=cmd_export)
 
     args = parser.parse_args()
@@ -297,7 +302,7 @@ Market types:
         args.func(args)
     except ImportError as e:
         logger.error(f"Missing dependency: {e}")
-        logger.error("Install with: pip install biva-client[scraper]")
+        logger.error("Install with: pip install mx-exchange-dataclient[scraper]")
         sys.exit(1)
     except KeyboardInterrupt:
         print("\nInterrupted")

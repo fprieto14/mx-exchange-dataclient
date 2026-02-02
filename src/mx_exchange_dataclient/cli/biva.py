@@ -6,7 +6,7 @@ Command-line interface for fetching BIVA data.
 Usage:
     biva issuer 2215
     biva documents 2215 --output ./capglpi
-    biva output 2215 --output ./capglpi/pdfs
+    biva download 2215 --output ./capglpi/pdfs
 """
 
 import argparse
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from biva_client import BIVAClient
+from mx_exchange_dataclient.clients.biva import BIVAClient
 
 logging.basicConfig(
     level=logging.INFO,
@@ -174,7 +174,9 @@ def cmd_export(args):
         doc_records.append({
             "id": doc.id,
             "tipo_documento": doc.tipo_documento,
-            "fecha_publicacion": doc.fecha_publicacion.isoformat() if doc.fecha_publicacion else None,
+            "fecha_publicacion": doc.fecha_publicacion.isoformat()
+            if doc.fecha_publicacion
+            else None,
             "filename": doc.file_name,
             "download_url": doc.download_url,
             "doc_type": doc.doc_type,
@@ -215,14 +217,15 @@ Examples:
   biva documents 2215 --all --output documents.csv
 
   # Download all documents
-  biva output 2215 --output ./downloads/capglpi
+  biva download 2215 --output ./downloads/capglpi
 
   # Full export (info + documents + PDFs)
-  biva export 2215 --output ./capglpi --output
+  biva export 2215 --output ./capglpi --download
         """,
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose logging",
     )
@@ -231,9 +234,15 @@ Examples:
 
     # issuer command
     issuer_parser = subparsers.add_parser("issuer", help="Get issuer information")
-    issuer_parser.add_argument("issuer_id", help="Issuer ID or name (e.g., 2215 or CAPGLPI)")
-    issuer_parser.add_argument("--securities", action="store_true", help="Include securities")
-    issuer_parser.add_argument("--emissions", action="store_true", help="Include emissions")
+    issuer_parser.add_argument(
+        "issuer_id", help="Issuer ID or name (e.g., 2215 or CAPGLPI)"
+    )
+    issuer_parser.add_argument(
+        "--securities", action="store_true", help="Include securities"
+    )
+    issuer_parser.add_argument(
+        "--emissions", action="store_true", help="Include emissions"
+    )
     issuer_parser.add_argument("--json", action="store_true", help="Output as JSON")
     issuer_parser.set_defaults(func=cmd_issuer)
 
@@ -243,12 +252,14 @@ Examples:
     docs_parser.add_argument("--output", "-o", help="Output CSV file")
     docs_parser.add_argument("--all", action="store_true", help="Fetch all pages")
     docs_parser.add_argument("--max-pages", type=int, help="Limit pages")
-    docs_parser.add_argument("--types", action="store_true", help="List document types only")
+    docs_parser.add_argument(
+        "--types", action="store_true", help="List document types only"
+    )
     docs_parser.add_argument("--json", action="store_true", help="Output as JSON")
     docs_parser.set_defaults(func=cmd_documents)
 
-    # output command
-    dl_parser = subparsers.add_parser("output", help="Download documents")
+    # download command
+    dl_parser = subparsers.add_parser("download", help="Download documents")
     dl_parser.add_argument("issuer_id", help="Issuer ID or name")
     dl_parser.add_argument("--output", "-o", required=True, help="Output directory")
     dl_parser.add_argument("--max-pages", type=int, help="Limit pages")
@@ -258,7 +269,9 @@ Examples:
     export_parser = subparsers.add_parser("export", help="Export full issuer data")
     export_parser.add_argument("issuer_id", help="Issuer ID or name")
     export_parser.add_argument("--output", "-o", required=True, help="Output directory")
-    export_parser.add_argument("--output", "-d", action="store_true", help="Also output PDFs")
+    export_parser.add_argument(
+        "--download", "-d", action="store_true", help="Also download PDFs"
+    )
     export_parser.add_argument("--max-pages", type=int, help="Limit document pages")
     export_parser.set_defaults(func=cmd_export)
 

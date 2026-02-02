@@ -46,7 +46,7 @@ class BMVDocument(BaseModel):
     @computed_field
     @property
     def download_url(self) -> str:
-        """Get direct output URL (converts viewer URL to ZIP URL if needed)."""
+        """Get direct download URL (converts viewer URL to ZIP URL if needed)."""
         if "visorXbrl.html" in self.url:
             # Extract ZIP path from viewer URL
             # e.g., visor/visorXbrl.html?docins=../fiduxbrl/fiduxbrl_123.zip

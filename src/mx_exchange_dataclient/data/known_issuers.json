@@ -1,0 +1,21 @@
+{
+  "CAPGLPI": {
+    "id": 2215,
+    "source": "biva",
+    "name": "Capital Global PI",
+    "ticker": "CAPGLPI"
+  },
+  "QTZALPI": {
+    "id": 2282,
+    "source": "biva",
+    "name": "Quetzal PI",
+    "ticker": "QTZALPI"
+  },
+  "LOCKXPI": {
+    "id": 35563,
+    "source": "bmv",
+    "market": "CGEN_CAPIT",
+    "name": "Lock Capital Private Investment I CKD",
+    "ticker": "LOCKXPI"
+  }
+}

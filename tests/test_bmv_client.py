@@ -6,13 +6,13 @@ These tests make real HTTP calls. Run with:
 Skip by default in CI.
 
 Note: Requires beautifulsoup4 and lxml:
-    pip install biva-client[scraper]
+    pip install mx-exchange-dataclient[scraper]
 """
 
 import pytest
 
 try:
-    from biva_client.bmv_client import BMVClient
+    from mx_exchange_dataclient.clients.bmv import BMVClient
 
     HAS_BMV = True
 except ImportError:

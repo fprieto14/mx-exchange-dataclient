@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -109,10 +110,20 @@ class DocumentFile(BaseModel):
     """Individual file within a document."""
 
     url: str
-    file_type: str = Field(alias="fileType")
-    file_name: str = Field(alias="fileName")
+    file_type: str | None = Field(default=None, alias="fileType")
+    file_name: str | None = Field(default=None, alias="fileName")
+    extension: str | None = None  # New API format uses extension instead
 
     model_config = {"populate_by_name": True}
+
+    @property
+    def ext(self) -> str:
+        """Get file extension from either format."""
+        if self.extension:
+            return self.extension.lower()
+        if self.file_type:
+            return self.file_type.lower()
+        return ""
 
 
 class Document(BaseModel):
@@ -139,12 +150,58 @@ class Document(BaseModel):
 
     @property
     def download_url(self) -> str:
-        """Get the full output URL for this document."""
+        """Get the full download URL for this document."""
         base = "https://biva.mx"
         path = self.nombre_archivo
+
+        # Handle XBRL viewer URLs - extract actual file path from query params
+        if "visorxbrl/index.html" in path:
+            parsed = urlparse(path)
+            params = parse_qs(parsed.query)
+            # Get XBRL file path from documentPathXbrl parameter
+            if "documentPathXbrl" in params:
+                xbrl_path = params["documentPathXbrl"][0]
+                return f"{base}{xbrl_path}"
+
         if path.startswith("/"):
             return f"{base}{path}"
         return f"{base}/{path}"
+
+    @property
+    def xbrl_url(self) -> str | None:
+        """Get the actual XBRL file URL from archivos_xbrl if available."""
+        base = "https://biva.mx"
+        for f in self.archivos_xbrl:
+            if f.ext == "xbrl":
+                url = f.url
+                if url.startswith("/"):
+                    return f"{base}{url}"
+                return f"{base}/{url}"
+        return None
+
+    def get_all_download_urls(self) -> dict[str, str]:
+        """Get all available download URLs for this document.
+
+        Returns dict with keys like 'pdf', 'xbrl', 'xlsx', 'docx', 'html'.
+        """
+        base = "https://biva.mx"
+        urls = {}
+
+        # Main document
+        if self.doc_type:
+            urls[self.doc_type.lower()] = self.download_url
+
+        # Additional files from archivos_xbrl
+        for f in self.archivos_xbrl:
+            ext = f.ext
+            if ext:
+                url = f.url
+                if url.startswith("/"):
+                    urls[ext] = f"{base}{url}"
+                else:
+                    urls[ext] = f"{base}/{url}"
+
+        return urls
 
     model_config = {"populate_by_name": True}
 
@@ -176,6 +233,7 @@ class PaginatedResponse(BaseModel):
 # Known issuer IDs for convenience
 KNOWN_ISSUERS: dict[str, int] = {
     "CAPGLPI": 2215,
+    "QTZALPI": 2282,
     # Add more as discovered
 }
 

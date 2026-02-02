@@ -2,7 +2,7 @@
 
 import pytest
 
-from biva_client.bmv_models import (
+from mx_exchange_dataclient.models.bmv import (
     BMVDocument,
     BMVIssuer,
     BMVSecurity,

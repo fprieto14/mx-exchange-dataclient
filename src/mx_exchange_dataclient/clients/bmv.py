@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Iterator
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 try:
     from bs4 import BeautifulSoup
@@ -20,7 +22,7 @@ try:
 except ImportError:
     HAS_BS4 = False
 
-from biva_client.bmv_models import (
+from mx_exchange_dataclient.models.bmv import (
     BMVDocument,
     BMVIssuer,
     BMVSecurity,
@@ -46,9 +48,13 @@ class BMVClient:
         >>> for doc in client.iter_all_documents("LOCKXPI", 35563, "CGEN_CAPIT"):
         ...     print(doc.filename, doc.download_url)
 
+        # Use as context manager for automatic cleanup
+        >>> with BMVClient() as client:
+        ...     issuer = client.get_issuer("LOCKXPI", 35563)
+
     Note:
         Requires beautifulsoup4 and lxml. Install with:
-        pip install biva-client[scraper]
+        pip install mx-exchange-dataclient[scraper]
     """
 
     BASE_URL = "https://www.bmv.com.mx"
@@ -57,6 +63,9 @@ class BMVClient:
         self,
         timeout: int = 30,
         rate_limit_delay: float = 0.5,
+        session: requests.Session | None = None,
+        pool_connections: int = 10,
+        pool_maxsize: int = 10,
     ):
         """
         Initialize BMV client.
@@ -64,22 +73,49 @@ class BMVClient:
         Args:
             timeout: Request timeout in seconds
             rate_limit_delay: Delay between requests (seconds)
+            session: Optional shared requests session
+            pool_connections: Number of connection pools (if creating new session)
+            pool_maxsize: Max connections per pool (if creating new session)
         """
         if not HAS_BS4:
             raise ImportError(
                 "beautifulsoup4 is required for BMVClient. "
-                "Install with: pip install biva-client[scraper]"
+                "Install with: pip install mx-exchange-dataclient[scraper]"
             )
 
         self.timeout = timeout
         self.rate_limit_delay = rate_limit_delay
+        self._owns_session = session is None
 
-        self.session = requests.Session()
+        if session is not None:
+            self.session = session
+        else:
+            self.session = requests.Session()
+            # Configure connection pooling
+            adapter = HTTPAdapter(
+                pool_connections=pool_connections,
+                pool_maxsize=pool_maxsize,
+                max_retries=Retry(total=0),
+            )
+            self.session.mount("https://", adapter)
+            self.session.mount("http://", adapter)
+
         self.session.headers.update({
-            "User-Agent": "bmv-client/0.1.0 (Mexican Exchange Data Client)",
+            "User-Agent": "mx-exchange-dataclient/0.1.0 (Mexican Exchange Data Client)",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
         })
+
+    def close(self):
+        """Close the session if we own it."""
+        if self._owns_session and self.session:
+            self.session.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
     def _fetch_page(self, path: str) -> "BeautifulSoup":
         """
@@ -413,9 +449,9 @@ class BMVClient:
         Download a document file.
 
         Args:
-            document: BMVDocument object to output
+            document: BMVDocument object to download
             output_dir: Directory to save file
-            delay: Delay before output (rate limiting)
+            delay: Delay before download (rate limiting)
 
         Returns:
             Path to downloaded file, or None if failed
@@ -450,7 +486,7 @@ class BMVClient:
             return filepath
 
         except Exception as e:
-            logger.error(f"Failed to output {url}: {e}")
+            logger.error(f"Failed to download {url}: {e}")
             return None
 
     def download_all_documents(

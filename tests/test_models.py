@@ -3,7 +3,7 @@
 import pytest
 from datetime import datetime
 
-from biva_client.models import (
+from mx_exchange_dataclient.models.biva import (
     Issuer,
     Security,
     Document,

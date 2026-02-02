@@ -8,7 +8,7 @@ Skip by default in CI.
 
 import pytest
 
-from biva_client import BIVAClient
+from mx_exchange_dataclient import BIVAClient
 
 
 # Mark all tests in this module as integration tests
