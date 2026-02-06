@@ -15,6 +15,9 @@ class XBRLData:
     balance_dates: dict[str, str]  # Concept -> date
     pl: dict[str, float]  # P&L concept -> value (quarterly)
     pl_ytd: dict[str, float] = field(default_factory=dict)  # P&L YTD values
+    audit_opinion: str | None = None  # "limpio", "con_salvedad", "negativa", "abstencion"
+    auditor_firm: str | None = None  # e.g., "KPMG"
+    opinion_date: str | None = None  # e.g., "27 de junio de 2024"
 
     def to_dict(self) -> dict:
         return asdict(self)

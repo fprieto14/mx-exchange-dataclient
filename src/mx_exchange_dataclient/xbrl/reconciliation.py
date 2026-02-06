@@ -42,18 +42,18 @@ def find_xbrl_files(folder: str | Path) -> list[dict[str, Any]]:
         # Skip macOS metadata files
         if fname.startswith("._"):
             continue
-        # Parse period from filename: ReporteTrimestral_1T_2025_...
+
+        # Extract timestamp from filename (usually at the end before .xbrl)
+        ts_match = re.search(r"_(\d{10,})\.xbrl$", fname)
+        timestamp = int(ts_match.group(1)) if ts_match else 0
+
+        # Try quarterly pattern first: ReporteTrimestral_1T_2025_...
         match = re.search(r"_([1-4])T_(\d{4})_", fname)
         if match:
             quarter = int(match.group(1))
             year = int(match.group(2))
-            # Sort key: year * 10 + quarter (e.g., 20251 for Q1 2025)
             sort_key = year * 10 + quarter
             period = f"{quarter}T_{year}"
-
-            # Extract timestamp from filename (usually at the end before .xbrl)
-            ts_match = re.search(r"_(\d{10,})\.xbrl$", fname)
-            timestamp = int(ts_match.group(1)) if ts_match else 0
 
             file_info = {
                 "path": str(f),
@@ -61,10 +61,33 @@ def find_xbrl_files(folder: str | Path) -> list[dict[str, Any]]:
                 "quarter": quarter,
                 "sort_key": sort_key,
                 "period": period,
+                "period_type": "quarterly",
                 "timestamp": timestamp,
             }
 
-            # Keep file with latest timestamp for each period
+            if period not in files_by_period or timestamp > files_by_period[period]["timestamp"]:
+                files_by_period[period] = file_info
+            continue
+
+        # Try annual (dictaminado) pattern: _4DT_2024_
+        match_annual = re.search(r"_4DT_(\d{4})_", fname)
+        if match_annual:
+            year = int(match_annual.group(1))
+            quarter = 4
+            # Sort key: sorts after 4T of same year (e.g., 20245 vs 20244)
+            sort_key = year * 10 + 5
+            period = f"4DT_{year}"
+
+            file_info = {
+                "path": str(f),
+                "year": year,
+                "quarter": quarter,
+                "sort_key": sort_key,
+                "period": period,
+                "period_type": "annual",
+                "timestamp": timestamp,
+            }
+
             if period not in files_by_period or timestamp > files_by_period[period]["timestamp"]:
                 files_by_period[period] = file_info
 

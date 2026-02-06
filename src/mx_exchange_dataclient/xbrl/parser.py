@@ -1,5 +1,6 @@
 """XBRL file parser for Mexican financial instruments."""
 
+import html
 import re
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +9,24 @@ import defusedxml.ElementTree as ET
 
 from mx_exchange_dataclient.models.xbrl import XBRLData
 from mx_exchange_dataclient.xbrl.concepts import BALANCE_SHEET_CONCEPTS, PL_CONCEPTS
+
+# XBRL element local names for audit metadata (mx_ccd namespace)
+_AUDIT_OPINION_TAG = "TypeOfOpinionOnTheFinancialStatements"
+_AUDIT_DATE_TAG = "DateOfOpinionOnTheFinancialStatements"
+_AUDITOR_FIRM_TAG = "NameServiceProviderExternalAudit"
+
+# Keywords to classify audit opinion text into standard categories
+_OPINION_KEYWORDS: dict[str, list[str]] = {
+    "limpio": [
+        "limpia", "limpio", "sin salvedad", "sin salvedades", "favorable",
+        "unqualified", "clean", "positiva", "positivo",
+        "presentan razonablemente", "presentan razonable",
+        "presentan en forma razonable",
+    ],
+    "con_salvedad": ["con salvedad", "con salvedades", "qualified", "except for"],
+    "negativa": ["negativa", "adverse", "desfavorable"],
+    "abstencion": ["abstención", "abstencion", "disclaimer", "denegación", "denegacion"],
+}
 
 
 class XBRLParser:
@@ -158,6 +177,54 @@ class XBRLParser:
                 return formatter(match)
         return "Unknown"
 
+    def extract_audit_metadata(self, filepath: str | Path) -> dict[str, str | None]:
+        """Extract audit opinion metadata from an XBRL file (4DT annual filings).
+
+        Args:
+            filepath: Path to XBRL file
+
+        Returns:
+            Dict with 'audit_opinion', 'auditor_firm', 'opinion_date' keys.
+            Values are None if the element is not found.
+        """
+        filepath = Path(filepath)
+        tree = ET.parse(filepath)
+        root = tree.getroot()
+
+        result: dict[str, str | None] = {
+            "audit_opinion": None,
+            "auditor_firm": None,
+            "opinion_date": None,
+        }
+
+        opinion_element_found = False
+
+        for elem in root.iter():
+            local = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+            text = (elem.text or "").strip()
+
+            if local == _AUDIT_OPINION_TAG:
+                opinion_element_found = True
+                if text:
+                    decoded = html.unescape(text)
+                    clean = re.sub(r"<[^>]+>", " ", decoded).strip()
+                    clean = re.sub(r"\s+", " ", clean)
+                    if clean:
+                        result["audit_opinion"] = _classify_opinion(clean)
+            elif local == _AUDITOR_FIRM_TAG and text:
+                result["auditor_firm"] = html.unescape(text).strip()
+            elif local == _AUDIT_DATE_TAG and text:
+                result["opinion_date"] = html.unescape(text).strip()
+
+        # Distinguish: element absent vs element present but empty/unclassified
+        if result["audit_opinion"] is None:
+            if opinion_element_found:
+                result["audit_opinion"] = "element_empty"
+            else:
+                result["audit_opinion"] = "not_found"
+
+        return result
+
     def parse_multiple(self, filepaths: list[str | Path]) -> list[XBRLData]:
         """Parse multiple XBRL files.
 
@@ -168,3 +235,24 @@ class XBRLParser:
             List of XBRLData objects
         """
         return [self.parse(f) for f in filepaths]
+
+
+def _classify_opinion(text: str) -> str:
+    """Classify raw audit opinion text into a standard category.
+
+    Returns one of: 'limpio', 'con_salvedad', 'negativa', 'abstencion'.
+    Falls back to the raw text (truncated to 50 chars) if no keyword matches.
+    """
+    lower = text.lower()
+    # Check limpio FIRST — "sin salvedad(es)" must take priority over
+    # "con salvedad(es)" which may appear later in the same text as a
+    # negated enumeration (e.g. "no ha emitido opinión con salvedades").
+    for keyword in _OPINION_KEYWORDS["limpio"]:
+        if keyword in lower:
+            return "limpio"
+    for category in ("con_salvedad", "negativa", "abstencion"):
+        for keyword in _OPINION_KEYWORDS[category]:
+            if keyword in lower:
+                return category
+    # Fallback: prefix with "unclassified:" so it's distinguishable from not_found
+    return f"unclassified:{text[:37]}" if text else ""
