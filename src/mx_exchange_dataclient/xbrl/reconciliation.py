@@ -47,11 +47,21 @@ def find_xbrl_files(folder: str | Path) -> list[dict[str, Any]]:
         ts_match = re.search(r"_(\d{10,})\.xbrl$", fname)
         timestamp = int(ts_match.group(1)) if ts_match else 0
 
-        # Try quarterly pattern first: ReporteTrimestral_1T_2025_...
+        # Try quarterly pattern: _1T_2025_ or _2025_1_
+        year: int | None = None
+        quarter: int | None = None
         match = re.search(r"_([1-4])T_(\d{4})_", fname)
         if match:
             quarter = int(match.group(1))
             year = int(match.group(2))
+        else:
+            # Alternate format: _YYYY_Q_ (e.g., _2021_1_)
+            match_alt = re.search(r"_(\d{4})_([1-4])_", fname)
+            if match_alt:
+                year = int(match_alt.group(1))
+                quarter = int(match_alt.group(2))
+
+        if year is not None and quarter is not None:
             sort_key = year * 10 + quarter
             period = f"{quarter}T_{year}"
 
@@ -69,8 +79,10 @@ def find_xbrl_files(folder: str | Path) -> list[dict[str, Any]]:
                 files_by_period[period] = file_info
             continue
 
-        # Try annual (dictaminado) pattern: _4DT_2024_
+        # Try annual (dictaminado) pattern: _4DT_2024_ or _2024_4D_
         match_annual = re.search(r"_4DT_(\d{4})_", fname)
+        if not match_annual:
+            match_annual = re.search(r"_(\d{4})_4D_", fname)
         if match_annual:
             year = int(match_annual.group(1))
             quarter = 4
